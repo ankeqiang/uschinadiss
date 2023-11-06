@@ -1,0 +1,1470 @@
+---
+title: "Who owns China’s Past? American Universities and the Writing of Chinese History"
+author:
+- name: Christian Henriot
+  affiliation: Aix-Marseille University
+date: "`r lubridate::today()`"
+tags: [China, United States, History, Historiography, Dissertation, Thesis]  
+abstract:  |
+  This markdown script encapsulates the methodological backbone of my study of American dissertations in Chinese history. Utilizing a suite of R packages such as tidyverse for data manipulation, ggplot2 for visualization, stm and stminsights for structural topic modeling, ggraph for graph plotting, reshape for data restructuring, kableExtra for advanced table generation, RColorBrewer and pals for color palette, this workflow underpins the data processing, analysis, and presentation of findings. The script stands as a contribution to the commitment to reproducibility and open scholarship, inviting fellow researchers to engage with, scrutinize, and build upon the foundations laid herein. 
+
+
+  <style>
+    body {
+    text-align: justify}
+  </style>
+
+output: 
+  html_document :
+    toc: true
+    toc_float: True
+    #  collapsed: false
+    #  smooth_scroll: false
+    toc_depth: 3
+    number_sections: true
+    code_folding: show # hide
+    theme: readable # all theme -> https://bootswatch.com/3/
+    #fig_width: 10
+    #fig_height: 10
+    #fig_caption: true
+    df_print: paged
+    
+---
+
+```{r setup, include=FALSE, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggplot2)
+library(stm)
+library(stminsights)
+library(ggraph)
+library(reshape)
+library(RColorBrewer)
+library(pals)
+library(knitr)
+library(kableExtra)
+library(tidytext)
+```
+
+
+# Introduction
+
+This study is based on the data extracted from the ProQuest [Dissertations and Thesis database](https://about.proquest.com/en/dissertations/). The dataset contains the metadata and abstracts of 1,132 dissertations completed in American universities between 1985 and 2022. This script does not include the pre-processing workflow that transformed the original dataset into the 'usdiss4' dataset used here. Yet the R-script that I wrote for data cleaning and formatting is available as an R-script (UShistdissPrep.R) on the [uschinadiss project](https://github.com/ankeqiang/uschinadiss) on GitHub.
+
+## Who is the script for?
+
+This guide addresses historians with a basic knowledge of language programming. We provide the code for the sake of traceability and reproducibility in research, but also to provide a workflow that other scholars can use and adapt for their own purpose. The display of code is optional. One can choose skip the code and just focus on the results and basic analyses. For access to the dataset and other scripts, please refer to the [uschinadiss project](https://github.com/ankeqiang/uschinadiss) on GitHub.
+
+## Objectives
+
+This script will guide the reader through the successive steps that I followed to process and analyze the data on American doctoral dissertations on China from the production of basic statistical measures to the analysis, visualization, and interpretation of the data using various computational methodologies. Of course, only elementary elements of analysis are provided here. For a more systematic analysis, please refer to my working paper ["Who owns China’s Past? American Universities and the Writing of Chinese History"](https://www.peers.press/p/TMRTRl7sIUqpr2hQ74hj) on the [PEERS platform](https://www.peers.press/).
+
+## Outline
+
+In this Markdown script, we shall use a series of approaches to transform the metadata on American docroal dissertations in Chinese history extracted from the ProQuest Dissertations & Thesis platform to perform a complete chain of operations from basic statistical computing, to mapping, and to topic modeling:
+
+ Statistical analysis and basic visualization of the dataset.
+ Construction of spatial data and mapping.
+ Textual analysis of the keywords and abstracts.
+ Implementation of topic modeling
+ Introduction of various topic modeling tools
+
+<br>
+
+# Research context
+
+## Source
+
+This study is based on the data extracted from the ProQuest [Dissertations and Thesis database](https://about.proquest.com/en/dissertations/). The dataset contains the metadata and abstracts of 1,132 dissertations completed in American universities between 1985 and 2022. 
+
+## Research object
+
+My purpose is to study the set of doctoral dissertations produced in American universities as a central contribution to historical knowledge on China. From a dataset that contain mostly metadata bout the dissertation, I develop a workflow that studies the metadata from various angles to uncover structures and patterns in the production of the dissertations and their content. Ultimately, I hope to highlight the trends in historical research about China.
+
+# Getting started
+
+<br>
+
+## Upload and examine the dataset
+
+<br>
+Upload the US dissertations dataset
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+usdiss4 <- read_delim("usdiss4.csv", delim = ";",
+escape_double = FALSE, col_types = cols(Period_Zh = col_skip()),
+trim_ws = TRUE)
+```
+
+<br>
+Check out the variables in the dataset
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+colnames(usdiss4)
+```
+
+
+Examine the first 3 rows of the dataset
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+head(usdiss4, 3) %>%  # Select only the first 3 rows of the dataframe
+  kable("html", escape = FALSE) %>%                 # Create the kable table in HTML format
+  kable_styling(bootstrap_options = c("striped",    # Add Bootstrap styling options
+                                      "hover",
+                                      "condensed"),
+                full_width = F,                     # Set to FALSE to avoid full width
+                position = "left") %>%              # Position the table to the left
+  column_spec(1, width = "150px") %>%               # Adjust the width of the first column (if needed)
+  scroll_box(width = "100%", height = "500px")      # Add a scroll box if the table is too large
+```
+
+
+## Preliminary statistical analysis
+
+
+### Number of dissertations by university
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+usdiss4_School <- usdiss4 %>% select(School_Name, Title) %>% group_by(School_Name) %>% count() %>%
+  arrange(desc(n))
+usdiss4_School
+```
+
+<br>
+### Number of dissertations by year
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+usdiss4_Year <- usdiss4 %>% select(Year, Title) %>% group_by(Year) %>% count()
+usdiss4_Year
+```
+
+<br>
+### Number of dissertations by degree
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+usdiss4_Deg <- usdiss4 %>% select(Degree, Title) %>% group_by(Degree) %>% count()
+usdiss4_Deg
+```
+
+<br>
+### Number of dissertations by period
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+usdiss4_Period <- usdiss4 %>% select(Period, Title) %>% group_by(Period) %>% count() %>%
+  arrange(desc(n))
+usdiss4_Period
+```
+
+
+To assess more precisely the proportion of dissertation by historical period, I compute the percentage with the sum of the 'number' column and I create a new column with the percentage.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+total_sum <- sum(usdiss4_Period$n)
+usdiss4_Period$percentage <- (usdiss4_Period$n / total_sum) * 100
+usdiss4_Period
+```
+
+
+### Number of dissertations by department
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+usdiss4_Dpt <- usdiss4 %>% select(Department_Strd, Title) %>% group_by(Department_Strd) %>% count() %>%
+  arrange(desc(n))
+usdiss4_Dpt
+```
+This result is not conclusive because the share of missing data (841) is too important. 
+
+<br>
+We can compute the contribution of history departments in absolute terms.
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+usdiss4_Hist <- usdiss4 %>% filter(str_detect(Department_Strd, "History"))
+usdiss4_Hist
+```
+In the available data, "history" is  mentioned 179 times
+
+
+## Visualization of dissertation data  (barplot)
+
+
+Plot the number of dissertations per year for the whole data set
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+ggplot(data = usdiss4) + 
+  geom_bar(mapping = aes(x = Year), fill="darkblue")+ 
+  labs(title = "Number of dissertations per year (1932-2022)", 
+       subtitle = "Dissertations per year", 
+       caption = "based on data extracted from ProQuest Dissertations",
+       x = "Year",
+       y = "Number of dissertations")
+```
+For a long period, the number of dissertation is insignificant, which creates an excessively spread out chart. Another reason for the lack of data is the incompleteness of the data in the ProQuest database.
+
+<br>
+To obtain a more relevant visulization, I focus on the years with at least 10 dissertations per year
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+usdiss4_Yearfil <- usdiss4_Year %>% filter(n>9)
+```
+
+
+Plot the number of dissertations per year for the selected dataset. In this visualization, I choose to order data from the year with the lowest number of dissertations to the year with the highest number. This is done by introducing the "reorder(Year, n) argument in the script. This presentation highlights which years were more productive.
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+ggplot(usdiss4_Yearfil, aes(x = reorder(Year, n), y = n)) + geom_bar(stat = "identity", fill="palegreen4")+ 
+  labs(title = "Number of dissertations per year",
+       subtitle = "(1990-2022)",
+       caption = "based on data extracted from ProQuest Dissertations",
+       x = "Year",
+       y = "Number of dissertations")
+```
+
+<br>
+In the script below, I revert to the visualization of the number of dissertations per year by order of year  after selecting the sample of dissertations produced after 1990.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+usdiss4_Samp <- usdiss4 %>% filter(Year > 1989)
+```
+
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+ggplot(data = usdiss4_Samp) + 
+  geom_bar(mapping = aes(x = Year), fill="darkblue")+ 
+  labs(title = "Number of dissertations per year (1990-2022)", 
+       subtitle = "Dissertations per year", 
+       caption = "based on data extracted from ProQuest Dissertations",
+       x = "Year",
+       y = "Number of dissertations")
+```
+<br>
+This visualization provides a view of the ups and downs of the production of dissertations over time. It shows three major, though unequal peaks around 1999, 2007-08, and 2018.
+
+<br>
+We can also plot the number of dissertations per university. I choose a horizontal bar chart with he universities that produced the highest number of dissertations in descending order.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+ggplot(usdiss4_School, aes(x = reorder(School_Name, n), y = n)) + geom_bar(stat = "identity", fill="palegreen4")+ 
+  coord_flip() +
+  labs(title = "Number of dissertations per university",
+       subtitle = "(1985-2022)",
+       caption = "based on data extracted from ProQuest Dissertations",
+       x = "University",
+       y = "Number of dissertations")
+```
+<br>
+Using the data in the whole dataset produces too many results for an effective visualization. The data needs to be filtered. I opt for a minimum number of 15 dissertations by university.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+usdiss4_Schoolfil <- usdiss4_School %>% filter(n>14)
+```
+
+
+<br>
+We can now plot the number of dissertations per university for the selected sample.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+ggplot(usdiss4_Schoolfil, aes(x = reorder(School_Name, n), y = n)) + geom_bar(stat = "identity", fill="palegreen4")+ 
+  coord_flip() +
+  labs(title = "Number of dissertations per university",
+       subtitle = "15 dissertations or more (1985-2022)",
+       caption = "based on data extracted from ProQuest Dissertations",
+       x = "University",
+       y = "Number of dissertations")
+```
+
+<br>
+For a more refined analysis of the evolution of the number of dissertations over time in each university, I create university-based datasets.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Harvard
+usdiss4_Harvard <- usdiss4 %>% filter(str_detect(School_Name, "Harvard"))
+# Stanford
+usdiss4_Stanford <- usdiss4 %>% filter(str_detect(School_Name, "Stanford"))
+# Princeton
+usdiss4_Princeton <- usdiss4 %>% filter(str_detect(School_Name, "Princeton"))
+# Chicago
+usdiss4_Chicago <- usdiss4 %>% filter(str_detect(School_Name, "Chicago"))
+# Columbia
+usdiss4_Columbia <- usdiss4 %>% filter(str_detect(School_Name, "Columbia"))
+# UCIrvine
+usdiss4_UCIrvine <- usdiss4 %>% filter(str_detect(School_Name, "Irvine"))
+# UCBerkeley
+usdiss4_UCBerkeley <- usdiss4 %>% filter(str_detect(School_Name, "Berkeley"))
+# Yale
+usdiss4_Yale <- usdiss4 %>% filter(str_detect(School_Name, "Yale"))
+# Michigan
+usdiss4_Michigan<- usdiss4 %>% filter(str_detect(School_Name, "Michigan"))
+```
+
+<br>
+Plot the number of dissertations per year at Columbia University
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+ggplot(data = usdiss4_Columbia) + 
+  geom_bar(mapping = aes(x = Year), fill="darkblue")+ 
+  labs(title = "Columbia dissertations per year (1960-2022)", 
+       subtitle = "Dissertations per year", 
+       caption = "based on data extracted from ProQuest Dissertations",
+       x = "Year",
+       y = "Number of dissertations")
+```
+<br>
+Plot the number of dissertations per year at Harvard University
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+ggplot(data = usdiss4_Harvard) + 
+  geom_bar(mapping = aes(x = Year), fill="darkblue")+ 
+  labs(title = "Harvard dissertations per year (1988-2022)", 
+       subtitle = "Dissertations per year", 
+       caption = "based on data extracted from ProQuest Dissertations",
+       x = "Year",
+       y = "Number of dissertations")
+```
+
+Select the universities with 15 dissertations or less using the 'forcats' library. This library provides tools for working with factors. Factors are R's data structure for categorical variables. In this script, the 'fct_lump' function lumps together all levels of the School_Name factor that are not in the top 15 most frequent levels into an "Other" level. This is helpful for simplifying factors where there are a lot of levels with few occurrences each. After lumping the less frequent school names into "Other", the count() function from dplyr is used to count the occurrences of each level of School_Name. 
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(forcats)
+usdiss4_SchoolLump <- usdiss4_School %>%
+  mutate(School_Name = fct_lump(School_Name, n = 15)) %>%
+  count(School_Name, sort = TRUE)
+``` 
+  
+
+# Mapping universities
+
+Another way to analyze the data on dissertations is to locate the 'sites of production' on a map of the United States. The original metadata contained only the name of the university, but not the location of the university. Mapping the 'sites of production' required a process of identifying the locations. This was done separately as it implied numerous iterations to homogenize the name of universities in our dataset and the names of 1,749 American universities with city names initially found on [UniRank](https://www.4icu.org/us/a-z/). The script for processing the spatial data, including matching city names and states is available on GitHub. The best source, however, is [Opendatasoft](https://public.opendatasoft.com/explore/dataset/us-colleges-and-universities/export/). It provides a more complete list of 6,559 American universities with city names, state, and geocoordinates.
+
+
+## Preparing the data
+
+Upload the 'US_universities_LocCoord' file with list of universities and geocoordinates. This is the file that I prepared for a more general purpose that contains a list of 2,130 American universities, both past and present (including universities and colleges that no longer exist). The file includes a columns with the Chinese names of universities when available, although this is not relevant for the present study.
+
+Upload the file with the geocoordinates of universities
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+US_universities_LocCoord <- read_delim("US_universities_LocCoord.csv", delim = ",",
+escape_double = FALSE, trim_ws = TRUE)
+```
+
+<br>
+Display the content of the dataset (first 15 rows). It contains the name of the universities, their location (city, state) and their geocoordinates (latitude, longitude).
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+head(US_universities_LocCoord, 15) %>%
+  kable("html", escape = FALSE) %>% 
+  kable_styling(bootstrap_options = c("striped",
+                                      "hover",
+                                      "condensed"),
+                full_width = F,         
+                position = "left") %>% 
+  column_spec(1, width = "150px") %>% 
+  scroll_box(width = "100%", height = "500px") 
+```
+The `kableExtra` package is designed to enhance the default `knitr::kable()` output for HTML and LaTeX tables. The functions are being used to transform and style a data frame for output as an HTML table within an R Markdown document. The functions and their parameters:
+
+1. `head(US_universities_LocCoord, 15)`: This function takes the `US_universities_LocCoord` data frame and slices the first 15 rows to be displayed.
+2. `kable("html", escape = FALSE)`: This creates a basic HTML table from the data frame. The `escape = FALSE` parameter tells `kable` not to escape HTML entities within the table. This is useful when you want to include HTML tags or special characters in the table cells that should be rendered as HTML.
+3. `kable_styling(...)`: This function applies additional styling to the `kable` table:
+   - `bootstrap_options`: This argument applies Bootstrap classes to the table for additional styling. In this case, "striped" will add zebra-striping to the table rows, "hover" will enable a hover state on the rows, and "condensed" will make the table more compact by cutting cell padding in half.
+   - `full_width = F`: This sets the table width. If `FALSE`, the table width will be set to the minimum width required to display the content without horizontal scrolling.
+   - `position = "left"`: This aligns the table to the left of the container.
+4. `column_spec(1, width = "150px")`: This function is used to specifically style the first column (`1`) of the table. The `width = "150px"` parameter sets the width of this column to 150 pixels.
+5. `scroll_box(width = "100%", height = "500px")`: This function puts the table inside a scrollable box. The `width = "100%"` parameter ensures the box spans the entire width of the container, while `height = "500px"` sets the box height to 500 pixels. If the table content exceeds these dimensions, scroll bars will appear to navigate through the table.
+The output of this code will be an HTML table with the first 15 rows of `US_universities_LocCoord`, styled with Bootstrap classes, and contained within a scrollable box that allows users to scroll through the table if it exceeds the specified dimensions.
+
+<br>
+To map the universities that produced dissertations, I proceed in two steps. First, I join the file with the list of universities prepared previously (usdiss4_School) and the geolocation file uploaded above (US_universities_LocCoord). This adds the spatial geocoordinates to each university name.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+usdiss4_SchoolLoc <- left_join(usdiss4_School, US_universities_LocCoord)
+```
+
+<br>
+Second, I add the locations to the original 'usdiss4' file through a join based on the names of universities. 
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+usdiss4Loc <- left_join(usdiss4, usdiss4_SchoolLoc)
+```
+
+
+
+## Visualizing the data
+
+Before mapping, I want to examine the distribution of dissertations by city. I choose a horizontal bar chart with decreasing values to represent the distribution.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+ggplot(usdiss4Loc, aes(x = reorder(City, n), y = n)) + geom_bar(stat = "identity", fill="palegreen4")+ 
+  coord_flip() +
+  labs(title = "Number of dissertations per city",
+       subtitle = "(1988-2022)",
+       caption = "based on data extracted from ProQuest Dissertations",
+       x = "University",
+       y = "Number of dissertations")
+```
+<br>
+The plot above is not very satisfying because it is too crowded due to the high number of cities in the results. To obtain a more readable visualization I filter the cities with at least 15 dissertations.
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+usdiss4Loc2 <- usdiss4Loc %>% filter(n>14) %>%
+  select(City, n)
+```
+
+<br>
+I plot the selected sample of dissertations per city      
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+ggplot(usdiss4Loc2, aes(x = reorder(City, n), y = n)) + geom_bar(stat = "identity", fill="darkblue")+ 
+  coord_flip() +
+  labs(title = "Number of dissertations per city",
+       subtitle = "15 dissertations or more",
+       caption = "based on data extracted from ProQuest Dissertations",
+       x = "University",
+       y = "Number of dissertations")
+```
+
+
+## Mapping the data
+
+To map the universities and their production, I use the 'leaflet' library. The 'leaflet' library is a powerful and flexible way to create interactive maps. With leaflet, one can create maps that users can zoom in and out of, pan across, and click on to reveal more information.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(leaflet)
+library(readxl)
+```
+
+Initially, I mapped all the universities, but because Hawaii is located in the middle of the Pacific, it distorts the default map visualization that I want to obtain.  In this script, I remove "hawaii" from the dataset.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+usdiss4LocUSA <- usdiss4Loc %>% filter(!str_detect(State, "Hawaii"))
+write_csv(usdiss4LocUSA, "usdiss4LocUSA.csv")
+us_uni <- usdiss4LocUSA
+```
+
+The distribution of universities that produced dissertation is presented in three successive maps. The first one below shows the universities (in fact the cities where they are located) represented by simple circles. Only the location is represented here. This map gives a preliminary view of the spatial distribution of unives et provides some clues about distribution patterns. We can improve this visualization.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+leaflet(data = us_uni) %>%
+  addTiles() %>%
+  addCircleMarkers(~lng, ~lat, popup = ~School_Name)
+```
+
+<br>
+The second map below shows the universities (in fact the cities where they are located) represented by circles that were customized to change the color and the size for better readability. Only the location is represented here. On this map, I change the symbol opacity and reduced its size to see better the actual locations.The darker green color indicates the number of dissertations. Yet, relying solely on color shade does not convey a clear sense of the relative importance of each university. In th enext map, I propose a different visualization.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+leaflet(data = us_uni) %>%
+  addTiles() %>%
+  addCircleMarkers(~lng, ~lat, radius = ~n/50,
+                   popup = ~paste(School_Name, ":", n, "dissertations"),
+                   fill = TRUE, fillOpacity = 0.5, color = "green")
+```
+
+
+<br>
+The third map below shows the universities (in fact the cities where they are located) represented by circles that are proprotional to the number of dissertations produced in each university. This map retains the color shade code, but the size of the points is proprotional to the number of dissertations.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+leaflet(data = us_uni) %>%
+  addTiles() %>%
+  addCircleMarkers(~lng, ~lat, radius = ~sqrt(n),
+                   popup = ~paste(School_Name, ":", n, "dissertations"),
+                   fill = TRUE, fillOpacity = 0.5, color = "green")
+```
+
+The map highlights the relative level of concentration of Chinese historical studies in a given location or region. We can see very clearly three main clusters of different sizes. The densest cluster is located on the east coast along a Washington D.C.-Cambridge axis. The second most important cluster can be found in California, with two sub-clusters around Berkeley-Stanford and Los Angeles. A less compact cluster can also be seen in the Great Lakes area, with Chicago at its center.
+
+
+
+# Textual analysis of the dissertation abstracts
+
+ The purpose of this section is to explore the content of the text content of the dissertations. The metadata available for analysis includes the keywords and the abstracts. The first step will be to categorize the dissertation using the keywords to get a sense of how the authors definied their work. The second step aims to uncover the trends in research based on a topic-modeling approach applied to the abstracts. For topic modeling, I use a combination of libraries. The main library for text analysis is 'stm' combined to stminsights for interactive visualization. 
+
+## Preparing the data
+
+Some dissertations came without an abstract. Since I need a set without void content, I remove the dissertations that have no abstract.
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+usdiss4tk <- usdiss4 %>% filter(!str_detect(Abstract, "Abstract not available"))
+```
+
+
+I remove all the quotation marks in Abstracts as these elements can affect the code. The quotation marks are often part of code writing. It is best to avoid having quotation marks in the text data to be processed.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+usdiss4tk <- usdiss4tk %>% mutate(name = str_remove_all(Abstract, "\""))
+```
+
+
+The data is pre-processed to remove from the text all the stop words. I use a custom list for English that I enriched to remove the most frequent and repetitive terms found in most abstracts (examine, chapter, dissertation, etc.).
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+usdiss4tkt <- usdiss4tk %>% select(StoreId, Abstract, Title, Year, School_Name, Keywords_Ext)
+meta <- usdiss4tkt %>% transmute(StoreId, Title, Year, School_Name, Keywords_Ext)
+corpus <- stm::textProcessor(usdiss4tk$Abstract, 
+                             metadata = meta, 
+                             stem = FALSE, 
+                             wordLengths = c(4, Inf), 
+                             customstopwords = c("part", "among", "many", "within", "study", "used", "well", "explain", "however", "china", "toward", "chinas", "china's", "chinese", "dissertation", "chapter", "chapters", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "also", "dissertation", "argue", "even", "rather", "examine", "examines", "argues", "explores", "thus"))
+```
+
+
+Topic modeling relies on word frequencies and co-occurence in the various documents. It does not make sense to use all the terms present in the text if they do not appear frequently. It is possible toadjust the threshold under which the less frequent terms will be removed from the dataset. In the script below, the threshold is set at 10. All the terms that appear from 1 to 9 times will be removed from the analysis.The stm library indicates the result of the trimming in the console. Usually, in my R scripts I copy-paste these results in my script to keep track of the effect of data processing.
+
+The function returns an object 'out' for 'output' that includes the document-term matrix (after thresholding), the reduced vocabulary, and the metadata, which can then be used to fit a topic model using the stm function.The result of stm::prepDocuments is a cleaner and more manageable set of data that will likely yield better results when passed into a topic modeling algorithm because it filters out noise and focuses on the more significant terms.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+out <- stm::prepDocuments(corpus$documents, corpus$vocab, corpus$meta, lower.thresh = 10)
+```
+Removing 18029 of 20671 terms (39883 of 142122 tokens) due to frequency 
+Your corpus now has 1109 documents, 2642 terms and 102239 tokens.
+
+<br>
+The number of topics is not something that can be defined arbitrarily. One nees to assess what number of topics will match the data. The stm::searchK function is used to determine the optimal number of topics for the topic model. This function evaluates models with different numbers of topics to see which number provides the best fit for the data. After calculating K, stm::searchK produces for metrics that can be examined in a plot.
+
+In our case, Ksearch pointed to an optimal model at 6 or 7 topics. The 6-topic model presents the most optimal parameters. I choose to calculate only tree models for the sake of comparison and to have both optimal models (6, 7) and a model (10) that may provide more granularity.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+Ksearch <- stm::searchK(out$documents, out$vocab, c(5, 6, 7, 10), cores = 1, verbose = FALSE)
+plot(Ksearch)
+```
+
+<br>
+The K search graphs 'Diagnostic value by number of topics' aim to help determine the best number of topics for any topic modeling exercise. Choosing the right number of topics is crucial in topic modeling as it can influence the interpretability and usefulness of the generated topics.
+Held-out Likelihood: This metric gives an idea of how well the model predicts unseen data. In the context of topic modeling, it often refers to a method where a portion of each document is "held out" or not shown to the model during training. After training, the model tries to predict the held-out words, and the likelihood of the actual held-out words under the model is computed. A higher held-out likelihood indicates a better fit to the unseen data. However, be cautious: a model that fits the training data too closely might overfit and not generalize well to new, unseen documents.
+
+<br>
+Residuals are the differences between the observed values and the values predicted by the model. In topic modeling, residuals might refer to the difference between the observed word distributions in documents and the word distributions predicted by the model.Smaller residuals indicate that the model's predictions are closer to the observed data. However, like with held-out likelihood, if the residuals are too small, it might indicate overfitting.
+
+<br>
+Semantic Coherence measures how topically coherent the words within each topic are. In other words, it gauges how semantically similar the top words in a topic are to each other. A high semantic coherence generally suggests that the words within a topic make sense together and that the topic is interpretable and meaningful. Models with higher semantic coherence are often preferred as they tend to produce more interpretable topics.
+
+<br>
+Lower Bound. In Bayesian topic modeling, the true likelihood of the data given the model is often intractable to compute directly. Instead, algorithms often optimize a lower bound on this likelihood. Tracking the lower bound can give insights into how well the model is fitting the data. A higher lower bound indicates a better fit. However, as always, be cautious about overfitting.
+
+<br>
+When selecting the number of topics, it is important to consider all these metrics together rather than relying on just one. Often, there's a trade-off: models with more topics might fit the data better (higher likelihood or lower residuals) but might produce less coherent topics (lower semantic coherence). The ideal is to find a balance where the topics are both interpretable and provide a good fit to the data.
+
+<br>
+Building the model with 6 topics
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+mod.6 <- stm::stm(out$documents, out$vocab, K=6, prevalence =~ School_Name + Year, data=out$meta, verbose = FALSE)
+```
+
+<br>
+Building the model with 7 topics
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+mod.7 <- stm::stm(out$documents, out$vocab, K=7, prevalence =~ School_Name + Year, data=out$meta, verbose = FALSE)
+```
+
+<br>
+Building the model with 10 topics
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+mod.10 <- stm::stm(out$documents, out$vocab, K=10, prevalence =~ School_Name + Year, data=out$meta, verbose = FALSE)
+```
+
+The dataset includes temporal data (Year). This may be useful for an examination of evolution over time. We estimate the time effect for year and university (school)
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+effect_6 <- stm::estimateEffect(1:6 ~ School_Name + Year, mod.6, meta=out$meta)
+effect_7 <- stm::estimateEffect(1:7 ~ School_Name + Year, mod.7, meta=out$meta)
+effect_10 <- stm::estimateEffect(1:10 ~ School_Name + Year, mod.10, meta=out$meta)
+```
+
+<br>
+
+## Visualizing the topic model data
+
+
+### Computing topic proportions in the corpus with the selected models
+
+This section displays the proportion the of topics for each document, along with their metadata. These metrics are a crucial element of information to determine how the topics are represented across the whole corpus and in individual documents. This can be used to determine the documents with the higher proportion of a given topic and select the documents to be examined as representative documents to assess and label the topics built by the model. The topics are never defined by the model. The model provides list of terms that embody the nature of th etopic. It is left to the researcher to qualify each topic with concise labels.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+topicprop6<-make.dt(mod.6, meta)
+topicprop6
+```
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+topicprop7<-make.dt(mod.7, meta)
+topicprop7
+```
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+topicprop10<-make.dt(mod.10, meta)
+topicprop10
+```
+
+
+
+### Visualizing topic proportions (MPA estimates)
+
+Visualize the distribution of document-topic proportions. In topic modeling, each document is assumed to be a mixture of various topics. The document-topic proportion is a measure of how much each topic is represented in a given document. For example, a document-topic proportion could tell you that a particular document consists of 30% Topic A, 20% Topic B, and so on. Maximum A Posteriori (MAP) estimation is a statistical estimate of an unknown quantity (in this case, the document-topic proportions) that equals the mode of the posterior distribution. The MAP estimate gives you the most likely value of the proportion of each topic in a document after observing the data. When aggregated, the MAP estimates of document-topic proportions across all documents, one gets a distribution that describes the variability and central tendency of topic prevalence across the corpus. In practice, the distribution of MAP estimates of document-topic proportions provides insight into which topics are most prevalent in the corpus, how topics are mixed within documents, and potentially how documents relate to one another based on their topic composition. 
+
+<br>
+Visualizing the distribution of document-topic proportions for the 6-topic model
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+plot.STM(mod.6, "hist")
+```
+This graph shows that in many cases a given topic is not represented in the documents (left-most bar). We can also see that most topics are present in the same proportions with the same distribution, except Topic 4 which has a higher representation in a more concentrated set of documents.
+
+
+Visualizing the distribution of document-topic proportions for the 7-topic model
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+plot.STM(mod.7, "hist")
+```
+
+
+Visualizing the distribution of document-topic proportions for the 10-topic model
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+plot.STM(mod.10, "hist")
+```
+
+
+### Visualizing topic distribution per document
+
+In this section we compute and visualize the topic distribution per document. The tidy function returns a tidy data frame where each variable is in a column, each observation is in a row, and each type of observational unit forms a table. The theta matrix contains the document-topic proportions. It shows the relationship between the documents and the topics, indicating how much each document pertains to each topic.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+td_theta6 <- tidytext::tidy(mod.6, matrix = "theta")
+td_theta7 <- tidytext::tidy(mod.7, matrix = "theta")
+td_theta10 <- tidytext::tidy(mod.10, matrix = "theta")
+```
+
+
+It is not possible to visualize topic proportion for all documents at once. We proceed by steps, starting with the first 15 documents in the different models. Be careful to select a sensible interval, as attempting to load a very huge corpus might crash the kernel.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+selectiontdthteta6<-td_theta6[td_theta6$document%in%c(1:15),] 
+selectiontdthteta7<-td_theta7[td_theta7$document%in%c(1:15),] 
+selectiontdthteta10<-td_theta10[td_theta10$document%in%c(1:15),] 
+```
+
+<br>
+Visualizing topic proportions for the first 15 documents in the 6-topic model
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+thetaplot6<-ggplot(selectiontdthteta6, aes(y=gamma, x=as.factor(topic), fill = as.factor(topic))) +
+  geom_bar(stat="identity",alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~ document, ncol = 3) +
+  labs(title = "Theta values per document (first 15 documents)",
+       y = expression(theta), x = "Topic")
+
+thetaplot6
+```
+
+<br>
+Visualizing topic proportions for the first 15 documents in the 7-topic model
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+thetaplot7<-ggplot(selectiontdthteta7, aes(y=gamma, x=as.factor(topic), fill = as.factor(topic))) +
+  geom_bar(stat="identity",alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~ document, ncol = 3) +
+  labs(title = "Theta values per document (first 15 documents)",
+       y = expression(theta), x = "Topic")
+
+thetaplot7
+```
+
+The distribution of topics in the documents is very uneven. A topic can be highly represented in a document, or a document can relate to several topics. In the graph above, we can see that in the first 15 documents of the 7-topic model Topic 7 is highly represented in document 3, while Topic 4 is equally highly represented in documents 8, 13 and to a lesser degree documents 4 and 6. Conversely, document 1 contain several topics at almost the same level of importance. These values provide a measure of how the algorithm has calculated the distribution of topics across all documents and for the corpus as a whole.
+
+<br>
+We can also select the last 15 documents in the same way
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+selectiontdthteta6l<-td_theta6[td_theta6$document%in%c(1015:1026),] 
+```
+
+<br>
+Visualizing topic proportions for the last 15 documents in the 6-topic model
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+thetaplot6l<-ggplot(selectiontdthteta6l, aes(y=gamma, x=as.factor(topic), fill = as.factor(topic))) +
+  geom_bar(stat="identity",alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~ document, ncol = 3) +
+  labs(title = "Theta values per document (bottom list)",
+       y = expression(theta), x = "Topic")
+
+thetaplot6l
+```
+
+
+### Visualizing word frequency in topics
+
+Next, we want to understand more about each topic – what are they really about. If we go back to the β matrix, we can have a more analytical look at the word frequencies per topic. The matrix stores the log of the word probabilities for each topic, and plotting it can give us a good overall understanding of the distribution of words per topic.
+
+In the script below, we compute and visualize the word frequencies for all topics in the the 6-, 7-, and 10-topic models.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+td_beta6 <- tidytext::tidy(mod.6) 
+options(repr.plot.width=7, repr.plot.height=8, repr.plot.res=100) 
+td_beta6 %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  mutate(topic = paste0("Topic ", topic),
+         term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(term, beta, fill = as.factor(topic))) +
+  geom_col(alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free_y") +
+  coord_flip() +
+  scale_x_reordered() +
+  labs(x = NULL, y = expression(beta),
+       title = "Highest word probabilities for each topic (6 topics)",
+       subtitle = "Different words are associated with different topics")
+```
+
+<br>
+This graph displays the ten most frequent words associated to each topic in the 6-topic model. These words can be used to define the nature of the topic and to give it a preliminary label. This list if of course very short and based on a single mode of computing (word frequency). The graphs below provide the same information for the 7- and 10-topic models. 
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+td_beta7 <- tidytext::tidy(mod.7) 
+options(repr.plot.width=7, repr.plot.height=8, repr.plot.res=100) 
+td_beta7 %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  mutate(topic = paste0("Topic ", topic),
+         term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(term, beta, fill = as.factor(topic))) +
+  geom_col(alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free_y") +
+  coord_flip() +
+  scale_x_reordered() +
+  labs(x = NULL, y = expression(beta),
+       title = "Highest word probabilities for each topic (7 topics)",
+       subtitle = "Different words are associated with different topics")
+```
+
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+td_beta <- tidytext::tidy(mod.10) 
+options(repr.plot.width=7, repr.plot.height=8, repr.plot.res=100) 
+td_beta %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  mutate(topic = paste0("Topic ", topic),
+         term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(term, beta, fill = as.factor(topic))) +
+  geom_col(alpha = 0.8, show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free_y") +
+  coord_flip() +
+  scale_x_reordered() +
+  labs(x = NULL, y = expression(beta),
+       title = "Highest word probabilities for each topic (10 topics)",
+       subtitle = "Different words are associated with different topics")
+```
+
+
+Since the graphs above provide only a limite dlust of terms, it is useful to have a more detailed look at the word distribution within each topic. In the graphs below, we shall examine a more detailed list of the words associted with each topic in the 6-topic model.
+
+## Topic model
+
+<br>
+**Topic 1**  
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+beta6T1<-td_beta6 %>%
+  mutate(topic = paste0("Topic ", topic),
+         term = reorder_within(term, beta, topic)) %>%
+  filter(topic=="Topic 1") #beta values for topic 1
+
+beta6plotT1<-ggplot(beta6T1[beta6T1$beta>0.003,], aes(term, beta, fill = as.factor(topic))) +
+  geom_bar(alpha = 0.8, show.legend = FALSE, stat = "Identity")+coord_flip()+labs(x ="Terms", y = expression(beta),
+                                                                                  title = "Word probabilities for Topic 1") #plot word probabilities higher than 0.003 for topic 1
+
+beta6plotT1
+```
+
+**Topic 2**  
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+beta6T2<-td_beta6 %>%
+  mutate(topic = paste0("Topic ", topic),
+         term = reorder_within(term, beta, topic)) %>%
+  filter(topic=="Topic 2") #beta values for topic 2
+
+beta6plotT2<-ggplot(beta6T2[beta6T2$beta>0.003,], aes(term, beta, fill = as.factor(topic))) +
+  geom_bar(alpha = 0.8, show.legend = FALSE, stat = "Identity")+coord_flip()+labs(x ="Terms", y = expression(beta),
+                                                                                  title = "Word probabilities for Topic 2")
+
+beta6plotT2
+```
+
+**Topic 3** 
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+beta6T3<-td_beta6 %>%
+  mutate(topic = paste0("Topic ", topic),
+         term = reorder_within(term, beta, topic)) %>%
+  filter(topic=="Topic 3") #beta values for topic 3
+
+beta6plotT3<-ggplot(beta6T3[beta6T3$beta>0.003,], aes(term, beta, fill = as.factor(topic))) +
+  geom_bar(alpha = 0.8, show.legend = FALSE, stat = "Identity")+coord_flip()+labs(x ="Terms", y = expression(beta),
+                                                                                  title = "Word probabilities for Topic 3") 
+
+beta6plotT3
+```
+
+**Topic 4**
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+beta6T4<-td_beta %>%
+  mutate(topic = paste0("Topic ", topic),
+         term = reorder_within(term, beta, topic)) %>%
+  filter(topic=="Topic 4") #beta values for topic 4
+
+beta6plotT4<-ggplot(beta6T4[beta6T4$beta>0.003,], aes(term, beta, fill = as.factor(topic))) +
+  geom_bar(alpha = 0.8, show.legend = FALSE, stat = "Identity")+coord_flip()+labs(x ="Terms", y = expression(beta),
+                                                                                  title = "Word probabilities for Topic 4") 
+
+beta6plotT4
+```
+
+**Topic 5** 
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+beta6T5<-td_beta %>%
+  mutate(topic = paste0("Topic ", topic),
+         term = reorder_within(term, beta, topic)) %>%
+  filter(topic=="Topic 5") #beta values for topic 5
+
+beta6plotT5<-ggplot(beta6T5[beta6T5$beta>0.003,], aes(term, beta, fill = as.factor(topic))) +
+  geom_bar(alpha = 0.8, show.legend = FALSE, stat = "Identity")+coord_flip()+labs(x ="Terms", y = expression(beta),
+                                                                                  title = "Word probabilities for Topic 5") 
+
+beta6plotT5
+```
+
+**Topic 6**
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+beta6T6<-td_beta %>%
+  mutate(topic = paste0("Topic ", topic),
+         term = reorder_within(term, beta, topic)) %>%
+  filter(topic=="Topic 3") #beta values for topic 3
+
+beta6plotT6<-ggplot(beta6T6[beta6T6$beta>0.003,], aes(term, beta, fill = as.factor(topic))) +
+  geom_bar(alpha = 0.8, show.legend = FALSE, stat = "Identity")+coord_flip()+labs(x ="Terms", y = expression(beta),
+                                                                                  title = "Word probabilities for Topic 6") 
+
+beta6plotT6
+```
+
+<br>
+We repeat the visualization for the topics in the 7-topic model.
+
+## 7-topic model
+
+**Topic 1 in mod.7** 
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+beta7T1<-td_beta7 %>%
+  mutate(topic = paste0("Topic ", topic),
+         term = reorder_within(term, beta, topic)) %>%
+  filter(topic=="Topic 1") #beta values for topic 1
+
+beta7plotT1<-ggplot(beta7T1[beta7T1$beta>0.003,], aes(term, beta, fill = as.factor(topic))) +
+  geom_bar(alpha = 0.8, show.legend = FALSE, stat = "Identity")+coord_flip()+labs(x ="Terms", y = expression(beta),
+                                                                                  title = "Word probabilities for Topic 1") 
+
+beta7plotT1
+```
+
+**Topic 2 in mod.7**  
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+beta7T2<-td_beta7 %>%
+  mutate(topic = paste0("Topic ", topic),
+         term = reorder_within(term, beta, topic)) %>%
+  filter(topic=="Topic 2") #beta values for topic 2
+
+beta7plotT2<-ggplot(beta7T2[beta7T2$beta>0.003,], aes(term, beta, fill = as.factor(topic))) +
+  geom_bar(alpha = 0.8, show.legend = FALSE, stat = "Identity")+coord_flip()+labs(x ="Terms", y = expression(beta),
+                                                                                  title = "Word probabilities for Topic 2") 
+
+beta7plotT2
+```
+
+**Topic 3 in mod.7** 
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+beta7T3<-td_beta7 %>%
+  mutate(topic = paste0("Topic ", topic),
+         term = reorder_within(term, beta, topic)) %>%
+  filter(topic=="Topic 3") #beta values for topic 3
+
+beta7plotT3<-ggplot(beta7T3[beta7T3$beta>0.003,], aes(term, beta, fill = as.factor(topic))) +
+  geom_bar(alpha = 0.8, show.legend = FALSE, stat = "Identity")+coord_flip()+labs(x ="Terms", y = expression(beta),
+                                                                                  title = "Word probabilities for Topic 3") 
+
+beta7plotT3
+```
+
+**Topic 4 in mod.7**
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+beta7T4<-td_beta7 %>%
+  mutate(topic = paste0("Topic ", topic),
+         term = reorder_within(term, beta, topic)) %>%
+  filter(topic=="Topic 4") #beta values for topic 4
+
+beta7plotT4<-ggplot(beta7T4[beta7T4$beta>0.003,], aes(term, beta, fill = as.factor(topic))) +
+  geom_bar(alpha = 0.8, show.legend = FALSE, stat = "Identity")+coord_flip()+labs(x ="Terms", y = expression(beta),
+                                                                                  title = "Word probabilities for Topic 4") 
+
+beta7plotT4
+```
+
+**Topic 5 in mod.7**  
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+beta7T5<-td_beta7 %>%
+  mutate(topic = paste0("Topic ", topic),
+         term = reorder_within(term, beta, topic)) %>%
+  filter(topic=="Topic 5") #beta values for topic 5
+
+beta7plotT5<-ggplot(beta7T5[beta7T5$beta>0.003,], aes(term, beta, fill = as.factor(topic))) +
+  geom_bar(alpha = 0.8, show.legend = FALSE, stat = "Identity")+coord_flip()+labs(x ="Terms", y = expression(beta),
+                                                                                  title = "Word probabilities for Topic 5") 
+
+beta7plotT5
+```
+
+**Topic 6 in mod.7**  
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+beta7T6<-td_beta7 %>%
+  mutate(topic = paste0("Topic ", topic),
+         term = reorder_within(term, beta, topic)) %>%
+  filter(topic=="Topic 6") #beta values for topic 6
+
+beta7plotT6<-ggplot(beta7T6[beta7T6$beta>0.003,], aes(term, beta, fill = as.factor(topic))) +
+  geom_bar(alpha = 0.8, show.legend = FALSE, stat = "Identity")+coord_flip()+labs(x ="Terms", y = expression(beta),
+                                                                                  title = "Word probabilities for Topic 6") 
+
+beta7plotT6
+```
+
+**Topic 7 in mod.7**  
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+beta7T7<-td_beta7 %>%
+  mutate(topic = paste0("Topic ", topic),
+         term = reorder_within(term, beta, topic)) %>%
+  filter(topic=="Topic 7") #beta values for topic 7
+
+beta7plotT7<-ggplot(beta7T7[beta7T7$beta>0.003,], aes(term, beta, fill = as.factor(topic))) +
+  geom_bar(alpha = 0.8, show.legend = FALSE, stat = "Identity")+coord_flip()+labs(x ="Terms", y = expression(beta),
+                                                                                  title = "Word probabilities for Topic 7") 
+
+beta7plotT7
+```
+
+The visualizations above allow one to refine the nature of the topics, at the same time as the frequency of the terms that contribute to the topic. If we take the example of the graph above, we can see that the dominant terms are Japanese, Taiwan, economc, and state. This is already a pretty good indication of the thmes covered by the dissertations linked to this topic. As we go down the list, the additional terms reinforce the sense of what is space is concerned and how much the economic dimension is present.
+
+
+We can explore alternative modes of data display, such as the plot.STM function with  “summary” argument. It visualizes in table format the topic distribution (which topics are overall more common) with the most common words for each topic.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+plot.STM(mod.6, "summary", n=5) # distribution and top 5 words per topic
+```
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+plot.STM(mod.7, "summary", n=5) # distribution and top 5 words per topic
+```
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+plot.STM(mod.10, "summary", n=5) # distribution and top 5 words per topic
+```
+
+
+In the word frequency graph above, the visualization of the words was based on a single mode of computing. With the labelTopics (or sageLabels) function, we can obtain a more detailed insights on the most frequent words in each topic through four modes of computing:
+Highest probability (default), FREX words (FREX weights words by frequency and exclusivity to the topic), lift words (frequency divided by frequency in other topics), and score (similar to lift, but with log frequencies). The most frequent words in each topic will appear in the console. 
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+labelTopics(mod.6, n=10) # complete list of top 10 words per topic
+labelTopics(mod.7, n=10) # complete list of top 10 words per topic
+labelTopics(mod.10, n=10) # complete list of top 10 words per topic
+```
+
+With this method, one can examine selected topics for a given model. In the example below, we display only topics 1, 3, and 6 in the 6-topic model. This can be used for a comparative examination of topics.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+labelTopics(mod.6, topics=c(1,3,6), n=10) # complete list of top 10 words per topics 1,3,6
+```
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+labelTopics(mod.7, topics=c(1,2,4,7), n=10) # complete list of top 10 words per topics 1,2,4,7
+```
+
+
+We can further have a glimpse at highly representative documents per each topic with the 'findThoughts' function and plot them with 'plotQuote'. The function will select representative documents of a given topic and display the full text (this might give best results with shorter documents).  In the example below, we display representative documents forfor topics 2 and 5.
+
+<br>
+First, we select the documents and assign the output to a variable named "thoughts2" and "thoughts5".
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+thoughts2 <- findThoughts(mod.6,texts=usdiss4tk$Abstract, topics=2, n=3)$docs[[1]]# select 3 representative documents per topic 2
+thoughts5 <- findThoughts(mod.6,texts=usdiss4tk$Abstract, topics=5, n=3)$docs[[1]]# select 3 representative documents per topic 5
+```
+
+<br>
+Second, we need to split the screen to display more than one document at the same time. In the present case, we define a display with two columns. One needs sometimes to tweak the parameters in 'mar=" to find the best display mode.
+
+The `par` function is used to set  graphical parameters:  
+- mfrow=c(1,2): This parameter sets up the plotting area into a 1 by 2 array, meaning that the subsequent plots will be arranged in a single row with two plots side by side.  
+- mar=c(0,0,2,2): This parameter sets the margins on the sides of the plots. The `mar` parameter takes a numeric vector of the form `c(bottom, left, top, right)`, which specifies the size of the margins in lines of text. In this case, it sets the bottom and left margins to 0, and the top and right margins to 2 lines each.
+After executing this line of code, the next two plots you create will be arranged next to each other horizontally, with no bottom or left margins and small top and right margins. Make sure to restore the display to the default parameters after completing the task.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+par(mfrow=c(1,2), mar=c(0,0,2,2))
+```
+
+<br>
+Third, we display the three most representative documents in topics 2 and 5.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+plotQuote(thoughts2, width=50, maxwidth=500, text.cex=0.5, main="Topic 2")
+plotQuote(thoughts5, width=50, maxwidth=500, text.cex=0.5, main="Topic 5")
+```
+<br>
+This line of code serves to restore the display to the default parameters
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+par(mfrow=c(1,1))
+```
+
+
+
+### Topics correlation
+
+Often, topics will share common terms and exhibit a degree of correlation. Topic correlation shows relations between topics based on the proportions of words they have in common. It does not work well with models with few topics, as can bee seen below. In a model with few topics, the topics are more often clearly delineated, with limited overlap between the terms that they contain. 
+
+The script below provide a basic visualization for the existence or absence of correlation. In the example below based on the 6-topic model, we see an absence of correlation.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+mod6.out.corr <- topicCorr(mod.6)
+plot(mod6.out.corr)
+```
+
+In the 10-topic model, however, several topics share the same vocabulary, although we do not know in which proportions. The graph below only manifests the existence of correlations.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+mod.out.corr <- topicCorr(mod.10)
+plot(mod.out.corr)
+```
+
+
+The Structural Topic Model (STM) package provides a functionality to estimate correlations between topics derived from the model. It supports two primary methods for this purpose: "simple" and "huge". The "simple" method involves applying a threshold to the covariance matrix to retain significant correlations, offering a straightforward approach to understanding topic relationships. On the other hand, the "huge" method employs a more complex, semiparametric approach that is implemented via the 'huge' package, capable of handling high-dimensional data and producing a more refined understanding of the covariances between topics. The choice of method depends on the complexity of the data and the desired granularity of the correlation analysis. The following script demonstrates the use of both methods:
+
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+corrsimple6 <- topicCorr(mod.6, method = "simple", verbose = FALSE)
+corrhuge <- topicCorr(mod.10, method = "huge", verbose = FALSE)
+```
+
+In this script, `corrsimple6` calculates the topic correlations for a 6-topic model using the "simple" method, while `corrhuge` computes the correlations for a 10-topic model using the "huge" method. Setting `verbose = FALSE` suppresses additional output during the computation, streamlining the process.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+par(mfrow=c(1,2), mar=c(0,0,2,2))
+```
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+plot(corrsimple6, main = "Simple method")
+plot(corrhuge, main = "Huge method")
+```
+
+The graph can be enriched by introducing measures of correlations and visually differentiating more the different elements of the graph. We shall use the 7-topic model as our basis for the graph visualization. Since producing a correlation graph sometimes generates unepecxted issues, we shall follow a step-by-step procedure to make sure that the stm_corrs7 object is a valid graph object that can be processed by ggraph.
+
+<br>
+First we extract the network from the topic model.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+stm_corrs10 <- get_network(model = mod.10,
+                         method = 'simple',
+                         labels = paste('Topic', 1:10),
+                         cutiso = FALSE)
+```
+With this code, all the nodes representing the topics are displayed. To display only the nodes that are correlated, change 'cutiso = FALSE' to 'cutiso = TRUE' in the
+
+We check the type of object. We expect an 'igraph' object
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+class(stm_corrs10)
+```
+
+<br>
+Second we create a minimal ggraph graph.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+ggraph(stm_corrs10, layout = 'fr') +
+  geom_edge_link() +
+  geom_node_point() +
+  geom_node_label(aes(label = name))
+```
+We can see here that only three topics are correlated.  
+
+
+<br>
+Third we add measures to the edges based on weight.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+ggraph(stm_corrs10, layout = 'fr') +
+  geom_edge_link(aes(edge_width = weight)) +
+  geom_node_point(size = 4)  +
+  geom_node_label(aes(label = name, size = props), repel = TRUE, alpha = 0.85)
+
+```
+
+
+Fourth we add the color of edges and enlarge the label of the nodes.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+ggraph(stm_corrs10, layout = 'fr') +
+  geom_edge_link(
+    aes(edge_width = weight),
+    label_colour = '#fc8d62',
+    edge_colour = '#377eb8') +
+  geom_node_point(size = 4, colour = 'black')  +
+  geom_node_label(
+    aes(label = name, size = props),
+    colour = 'black',  repel = TRUE, alpha = 0.85) +
+  scale_size(range = c(2, 10), labels = scales::percent) +
+  labs(size = 1.0,  edge_width = 1.0, title = "Simple method") +
+  theme_graph()
+```
+In the case of the 10-topic model, because it contains negative values, the 'huge' method does not apply. 
+
+
+Another way to explore the topics is to examine them side by side. The 'perspective' argument enables to compare topics two by two. In the example below, we compare topic 1 and topic 5 in the 6-topic model and topic 2 and topic 6 in the 7-topic model. The closer the terms are to the middle line, the highre the degree of similarity between the two topics. This can be useful to study why two topics that see to relate to the same issues are distinct from each other.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+plot(mod.6, type="perspectives", topics=c(1, 5))
+```
+
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+plot(mod.7, type="perspectives", topics=c(2, 6))
+```
+
+This line of code serves to restore the display to the default parameters
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+par(mfrow=c(1,1))
+```
+
+Word clouds provide an intuitive, though less rigorous way of visualizing word prevalence in topics. Yet they can be used to get a perspective on topics. They can also be used in publications.
+
+First, we split the screen into two rows to display two word clouds
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+par(mfrow=c(1,2), mar=c(0,0,2,2))
+```
+
+Second, we use the 'cloud' function to compute word clouds for topic 1 and topic 5 in the 6-topic model. Usually, we display word clouds within the same model, but the flexibility of the stm library if flexible and you could display wordclouds from two different models.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+cloud(mod.6, topic = 1, scale = c(4, 0.4))
+cloud(mod.6, topic = 5, scale = c(4, 0.4))
+```
+
+
+This line of code serves to restore the display to the default parameters
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+par(mfrow=c(1,1))
+```
+
+
+In the example below, we show how to display a group of four wordclouds together. The first line of the script prepares for splitting into four rows to display the four word clouds.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+par(mfrow=c(2,4), mar=c(0,0,4,4))
+```
+
+<br>
+The lines of code below serves to visualize the four wordclouds as a single image.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+cloud(mod.6, topic = 1, scale = c(4, 0.4))
+cloud(mod.6, topic = 3, scale = c(4, 0.4))
+cloud(mod.6, topic = 5, scale = c(4, 0.4))
+cloud(mod.6, topic = 6, scale = c(4, 0.4))
+```
+
+
+This line of code serves to restore the display to the default parameters
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+par(mfrow=c(1,1))
+```
+
+
+### Interactively visualize an LDA topic model
+
+In the script above, we have provide ways to examine correlations between topics through static visualizations. the 'toLDA' function offers the possibility to examine the topics, their content (word frequency by topic and in the whole corpus), and correlations. It is not activated in this script because interactive visualizations are not compatible with the Markdown script. To implement it, paste the code in an R script and the the line of code without the hashtag (#). We provide a single example with the 10-topic model. 
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#stm::toLDAvis(mod.10, doc=out$documents)
+```
+
+The `stm::toLDAvis` function takes a fitted STM object (in this case, `mod.10` which is a model with 10 topics) and the original document-term matrix or any other input used in the STM (`doc=out$documents`), and it transforms this information into a format that can be used with the LDAvis package. This allows for an interactive visualization where each topic is represented in a two-dimensional space based on its similarity to other topics. This visualization helps in interpreting the topics, as it shows the distribution of words within each topic and the relative sizes of the topics.
+
+<br>
+This function is particularly useful because it enables one to explore the relationships between different topics in a visually intuitive way, making it easier to understand the structure of the data and the nature of the topics extracted by the model.
+
+
+### Topic proportion over time
+
+<br>
+Topic proportion per year 
+
+This line of code creates a new data frame `topicprop10s` from `topicprop10` by removing columns that are not needed for the analysis. The `select(-c(...))` function is used to exclude these columns.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Remove unwanted columns  from topicprop10
+topicprop10s <- topicprop10 %>% select(-c(Title, School_Name, Keywords_Ext, Year))
+```
+
+Next, we join the two relevant data frames by the new StoreId column. The `inner_join` function is used to merge `topicprop10s` with another data frame `usdiss4tkt` based on a common column, `StoreId`. The result is `combined_data`, which contains rows that have matching `StoreId` values in both data frames.  `usdiss4tkt` contains the full metadata of the dissertations corpus.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+combined_data <- inner_join(topicprop10s, usdiss4tkt, by = c("StoreId" = "StoreId"))
+```
+
+We group and summarize the data for visualization. The `group_by` function is used to group the combined data by the `Year` column, while the `summarise(across(starts_with("Topic"), mean, na.rm = TRUE))` calculates the mean of all columns that start with "Topic" for each group, while removing `NA` values (`na.rm = TRUE`).
+
+```{r warning=FALSE, message=FALSE}
+topic_proportion_per_year10 <- combined_data %>%
+  group_by(Year) %>%
+  summarise(across(starts_with("Topic"), mean, na.rm = TRUE))
+```
+
+
+We need to reshape data frame to transforms `topic_proportion_per_year10` from a wide format to a long format using `pivot_longer`. The columns except `Year` are turned into two new columns: `variable` and `value`. Each `variable` contains the name of the original column, and `value` contains the corresponding data.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+vizDataFrame10y <- topic_proportion_per_year10 %>% pivot_longer(!Year, names_to = "variable", values_to = "value")
+```
+
+We can now plot topic proportions per year as bar plot and examine how the prevalence of the topics changed over time. The script visualizes the data using `ggplot2`. 
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+ggplot(vizDataFrame10y, aes(x=Year, y=value, fill=variable)) + 
+  geom_bar(stat = "identity") + ylab("proportion") + 
+  scale_fill_manual(values = paste0(alphabet(20), "FF"), name = "Topic") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(title="Topics over time in US dissertations", 
+       subtitle = "Topic proportion over time", 
+       caption = "10-topic stm model")
+```
+
+It creates a bar plot with years on the x-axis, topic proportions on the y-axis, and different colors for each topic.
+- `geom_bar(stat = "identity")` indicates that the heights of the bars represent the data values directly without any transformation.
+- The `scale_fill_manual` function is used to manually set the colors of the bars, presumably with `alphabet(20)` generating a palette of colors.
+- `theme(axis.text.x = element_text(angle = 90, hjust = 1))` rotates the x-axis text for better readability.
+- The `labs` function adds labels and a title to the plot.
+
+
+Depending on the number of topics, the default color may not be optimal. It is possible to change the palette of colors and choose a more appropriate set of colors. In this script, we use the 'RColorBrewer' library. To explore other color palettes, one can find the color alphabet at [colorbrwer](http://www.colorbrewer2.org). 
+
+The line `color_palette <- brewer.pal(10, "Set3")` is creating a color palette using the `brewer.pal` function from the `RColorBrewer` package. The number `10` here specifies how many different colors you want in the palette, and `"Set3"` is the name of the color scheme from which you want the colors to be selected. One should change the number `10` to a different value if more or fewer distinct colors are needed for data visualization. For example:
+- If you have 5 categories to represent and you use `brewer.pal(10, "Set3")`, you will get 10 colors, but the visualization will only use 5 of them.
+- If you have 12 categories but you only generate 10 colors, two categories will not have unique colors, which could be misleading or visually unappealing.
+You should always adjust the number to match the exact number of unique colors you need for your specific visualization task.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+color_palette <- brewer.pal(10, "Set3") 
+```
+
+Finally, we can plot topic proportions per year as bar plot with the new color palette.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+ggplot(vizDataFrame10y, aes(x=Year, y=value, fill=variable)) + 
+  geom_bar(stat = "identity") + 
+  ylab("proportion") + 
+  scale_fill_manual(values=color_palette, name = "Topic") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(title="Topics over time in US dissertations", 
+       subtitle = "Topic proportion over time", 
+       caption = "10-topic stm model")
+```
+  
+<br> 
+Let us review each part of the code:
+  
+<br>
+1. `ggplot(vizDataFrame10y, aes(x=Year, y=value, fill=variable))`:
+   - Initializes a ggplot object with `vizDataFrame10y` as the data source.
+   - `aes` sets the aesthetic mappings: `Year` on the x-axis, `value` on the y-axis, and `variable` as the fill color (which differentiates the bars based on the `variable` column, representing different topics).
+   
+<br>
+2. `geom_bar(stat = "identity")`:
+   - Adds bars to the plot with heights corresponding to the `value` column in the data frame.
+   - `stat = "identity"` tells ggplot that the data provided in the `y` aesthetic is already aggregated, so it should be used directly to determine the height of the bars.
+
+<br>
+3. `ylab("proportion")`:
+   - Sets the label for the y-axis as "proportion."
+
+<br>
+4. `scale_fill_manual(values=color_palette, name = "Topic")`:
+   - Specifies the colors to use for the `fill` aesthetic manually based on `color_palette`.
+   - Sets the legend title to "Topic."
+
+<br>
+5. `theme(axis.text.x = element_text(angle = 90, hjust = 1))`:
+   - Adjusts the theme of the plot, specifically the x-axis text elements.
+   - Rotates the x-axis labels by 90 degrees and justifies them so that the text is aligned with the tick marks (useful for long labels).
+
+<br>
+6. `labs(title="Topics over time in US dissertations", subtitle = "Topic proportion over time", caption = "10-topic stm model")`:
+   - Adds labels to the plot: a main title, a subtitle, and a caption.
+
+<br>
+If one changes the source of data, there is no need to intervene on points 1 and 2. Most commonly, one will have to adjust the content in point 6 (title, sub-title and caption).
+
+
+An alternative visual representation is to plot topic proportions per year as line plot. It is not very appropriate here due to the number of topics, but this may work for a model with a lower number of topics. We provide the script for refercne.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+ggplot(vizDataFrame10y, aes(x=Year, y=value, group=variable, color=variable)) + 
+  geom_line() + 
+  ylab("proportion") + 
+  scale_color_manual(values = paste0(alphabet(20), "FF"), name = "Topic") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(title="Topics over time in US dissertations", 
+       subtitle = "Topic proportion over time", 
+       caption = "10-topic stm model")
+```
+
+
+<br>
+### stminsight LDA interface
+
+For a more complete exploration of topics based on a single or different models, we strongly recommend using the'run_stminsights' function in stm. Running the function will open an R-shiny window where one can upload the save data of the computed models. One need sto save the project data as an '.RData' file and export it. After uploading the same file in the stminsights interface, the data becomes available under a series of tabs that present each different forms of visualization, as well as the possibility to label the topics more precisely. We provide the line of script to activate 'run_stminsights', but we leave it inactive since the Markdown format will crash with interactive visualizations. Below we present four snapshots of the main tabs of the run_stminsights LDA interface.
+
+```{r warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#run_stminsights()
+```
+
+![Main interface page](/data/user/h/chenriot/ushistdiss/Images/LDA_Default.png)
+![Topic proportion in corpus](/data/user/h/chenriot/ushistdiss/Images/LDA_TopPropCorp.png)
+
+![Topic correlations graph](/data/user/h/chenriot/ushistdiss/Images/LDA_Correlations.png)
+
+![Model diagnostics](/data/user/h/chenriot/ushistdiss/Images/LDA_Models.png)
+
+<br>
+# Concluding Remarks
+
+This investigation into American doctoral dissertations on Chinese history is anchored in a dataset that includes metadata and abstracts summarizing each document's content. The deployment of various computational techniques has unveiled the landscape of academic engagement with China's historical narrative. By utilizing different R packages, the historiographical contributions of American universities have been methodically dissected.
+
+The statistical and textual scrutiny of dissertation abstracts and keywords has illuminated the thematic undercurrents within scholarly research on Chinese history. The use of author-defined keywords to categorize dissertations has provided insight into their self-perceived scholarly identity. The study's linchpin, topic modeling, employed Latent Dirichlet Allocation (LDA) to outline the primary thematic threads in the body of work. This computational method quantifies topic prominence and their interrelations, revealing subtle shifts that mark the historiography of Chinese history as framed by American academia.
+
+The necessity of computational methods is clear in managing the extensive corpus these dissertations represent. This strategy is adaptable to a broad spectrum of topics, particularly those emerging from bibliographic database queries such as CNKI, Historical Abstracts, or even journal platforms like JSTOR or MUSE. The markdown script systematically analyzes the data through several steps:
+
+- Summarization of Main Trends:
+   The topic modeling has revealed a wide range of research foci, from the political dynamics of ancient dynasties to the revolutions of the modern era. Trends indicate a diversification of interest over time, with early dissertations concentrating on traditional historical narratives and more recent works delving into thematic areas such as gender studies. This shift reflects a broader transformation within the field of historiography, where multi-disciplinary approaches have become increasingly prevalent.
+
+- Keyword Categorization:
+  Keywords provided by authors offer a self-reflective glimpse of scholarly identities, serving as an authorial perspective on academic contributions and intentions. This metadata, albeit subjective, highlights the evolution of scholarly discourse and the rise of new terminologies.
+
+- Topic Modeling:
+   The LDA topic models have served as a computational microscope, bringing into focus the thematic clusters that dominate the corpus. The most prevalent topics have revolved around the political and economic transformations in Chinese history, indicating a strong historiographical emphasis on structural changes. The inter-topic correlations have further revealed how areas such as social history and international relations have increasingly interwoven, suggesting a more interconnected approach to understanding China's past.
+
+The findings bear significant weight on the historiography of Chinese history, proposing that American academic institutions are not mere knowledge custodians but active narrators of the Chinese historical account. The scope of dissertations signifies a shift from Eurocentric perspectives to a nuanced comprehension that embraces indigenous viewpoints and the intricacies of China's global interactions. This research paves the way for future inquiries, such as comparing American dissertations with those from other regions to identify global academic trends or assessing the influence of these works on the broader Chinese studies field.
+
+However, the computational approach has its confines. Topic modeling, while potent, is algorithm-based and may not fully grasp the subtleties of human interpretation. Moreover, the focus on keywords and abstracts means that the deeper insights within full dissertation texts are not examined. Despite these limitations, the computational methods applied are invaluable for navigating historical discourse complexities, offering a replicable model for future historiographical research.
+
+This study contributes to digital historiography by showcasing how computational analysis can refine our understanding of academic patterns and the evolution of historiographical themes. The methodologies introduced are becoming indispensable in the historian's repertoire, fostering a profound, multifaceted comprehension of how we, as scholars, construct the past and craft the historical narrative for subsequent generations' interpretation.
